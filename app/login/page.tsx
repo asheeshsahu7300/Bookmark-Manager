@@ -1,11 +1,11 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { Suspense, useEffect, useState } from 'react'
 import { createBrowserClient } from '@/lib/supabase'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { Bookmark } from 'lucide-react'
 
-export default function LoginPage() {
+function LoginContent() {
   const supabase = createBrowserClient()
   const router = useRouter()
   const searchParams = useSearchParams()
@@ -13,7 +13,6 @@ export default function LoginPage() {
   const [isLoading, setIsLoading] = useState(false)
 
   useEffect(() => {
-    // Check if user is already logged in
     const checkUser = async () => {
       const {
         data: { session },
@@ -24,7 +23,6 @@ export default function LoginPage() {
     }
     checkUser()
 
-    // Check for errors in URL
     const errorParam = searchParams.get('error')
     if (errorParam) {
       setError('Authentication failed. Please try again.')
@@ -127,5 +125,19 @@ export default function LoginPage() {
         </div>
       </div>
     </div>
+  )
+}
+
+export default function LoginPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center">
+          <div className="text-gray-500">Loading...</div>
+        </div>
+      }
+    >
+      <LoginContent />
+    </Suspense>
   )
 }
