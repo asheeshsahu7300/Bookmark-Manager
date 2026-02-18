@@ -31,8 +31,8 @@ export default function BookmarkList({ userId }: BookmarkListProps) {
     const setupRealtimeSubscription = async () => {
       console.log('🔌 Setting up WebSocket subscription for user:', userId)
 
-      // Create a unique channel name with timestamp to avoid conflicts
-      const channelName = `bookmarks:${userId}:${Date.now()}`
+      // Use a consistent channel name to avoid frequent re-subscriptions
+      const channelName = `bookmarks-list-${userId}`
 
       channel = supabase
         .channel(channelName)
@@ -45,23 +45,20 @@ export default function BookmarkList({ userId }: BookmarkListProps) {
             filter: `user_id=eq.${userId}`,
           },
           (payload: any) => {
-            console.log('📡 WebSocket event received:', payload)
+            console.log('📡 Real-time event received:', payload.eventType, payload)
 
             if (payload.eventType === 'INSERT') {
-              console.log('➕ Adding new bookmark:', payload.new)
+              console.log('➕ Real-time: Adding new bookmark:', payload.new.id)
               setBookmarks((prev) => {
                 const exists = prev.some((b) => b.id === payload.new.id)
-                if (exists) {
-                  console.log('⚠️ Bookmark already exists, skipping')
-                  return prev
-                }
+                if (exists) return prev
                 return [payload.new as BookmarkType, ...prev]
               })
             } else if (payload.eventType === 'DELETE') {
-              console.log('🗑️ Removing bookmark:', payload.old.id)
+              console.log('🗑️ Real-time: Removing bookmark:', payload.old.id)
               setBookmarks((prev) => prev.filter((b) => b.id !== payload.old.id))
             } else if (payload.eventType === 'UPDATE') {
-              console.log('📝 Updating bookmark:', payload.new.id)
+              console.log('📝 Real-time: Updating bookmark:', payload.new.id)
               setBookmarks((prev) =>
                 prev.map((b) => (b.id === payload.new.id ? (payload.new as BookmarkType) : b))
               )
@@ -69,18 +66,8 @@ export default function BookmarkList({ userId }: BookmarkListProps) {
           }
         )
         .subscribe((status: string) => {
-
+          console.log('📊 Real-time status:', status)
           setConnectionStatus(status)
-
-          if (status === 'SUBSCRIBED') {
-            console.log('WebSocket connected and subscribed!')
-          } else if (status === 'CHANNEL_ERROR') {
-            console.error('WebSocket channel error!')
-          } else if (status === 'TIMED_OUT') {
-            console.error('WebSocket connection timed out!')
-          } else if (status === 'CLOSED') {
-            console.log(' WebSocket connection closed')
-          }
         })
     }
 
@@ -149,8 +136,16 @@ export default function BookmarkList({ userId }: BookmarkListProps) {
 
   return (
     <>
-      {/* Connection Status Indicator */}
-
+      {/* Real-time Connection Status (Subtle) */}
+      <div className="mb-4 flex items-center justify-end gap-2 text-[10px] uppercase tracking-wider font-semibold">
+        <div className={`w-1.5 h-1.5 rounded-full ${connectionStatus === 'SUBSCRIBED' ? 'bg-green-500 shadow-[0_0_5px_rgba(34,197,94,0.5)]' :
+            connectionStatus === 'CHANNEL_ERROR' ? 'bg-red-500' :
+              'bg-gray-300'
+          }`} />
+        <span className={connectionStatus === 'SUBSCRIBED' ? 'text-green-600' : 'text-gray-400'}>
+          {connectionStatus === 'SUBSCRIBED' ? 'Live Sync Active' : 'Connecting Sync...'}
+        </span>
+      </div>
 
       {bookmarks.length === 0 ? (
         <div className="bg-white rounded-lg shadow-md p-12 text-center">
