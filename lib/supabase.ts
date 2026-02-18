@@ -1,11 +1,12 @@
 import { createClientComponentClient } from '@supabase/auth-helpers-nextjs'
-import { createClient } from '@supabase/supabase-js'
+import type { Database } from './database.types'
+
+// Singleton browser client — all components share ONE realtime connection
+let browserClient: ReturnType<typeof createClientComponentClient<Database>> | null = null
 
 export const createBrowserClient = () => {
-  return createClientComponentClient()
+  if (!browserClient) {
+    browserClient = createClientComponentClient<Database>()
+  }
+  return browserClient
 }
-
-export const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-)

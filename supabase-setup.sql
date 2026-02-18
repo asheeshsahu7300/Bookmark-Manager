@@ -36,18 +36,12 @@ CREATE POLICY "Users can delete their own bookmarks"
   USING (auth.uid() = user_id);
 
 -- 6. Enable Realtime (for real-time updates across tabs)
-DO $$
-BEGIN
-  IF NOT EXISTS (
-    SELECT 1 FROM pg_publication_tables 
-    WHERE pubname = 'supabase_realtime' 
-    AND schemaname = 'public' 
-    AND tablename = 'bookmarks'
-  ) THEN
-    ALTER PUBLICATION supabase_realtime ADD TABLE bookmarks;
-  END IF;
-END $$;
+ALTER PUBLICATION supabase_realtime ADD TABLE bookmarks;
 
+-- 7. CRITICAL: Without this, DELETE events are silently dropped when using
+--    filtered subscriptions (e.g. filter: user_id=eq.xxx) because Postgres
+--    only sends the primary key by default. FULL sends all columns so the
+--    user_id filter can match on delete events.
 ALTER TABLE bookmarks REPLICA IDENTITY FULL;
 
 -- 7. Verify setup

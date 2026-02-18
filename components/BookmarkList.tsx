@@ -1,125 +1,34 @@
 'use client'
 
-import { useEffect, useState } from 'react'
-import { Trash2, ExternalLink, Bookmark } from 'lucide-react'
-import { createBrowserClient } from '@/lib/supabase'
+import { useState } from 'react'
+import { Trash2, ExternalLink, Bookmark, Loader2 } from 'lucide-react'
 import type { Database } from '@/lib/database.types'
-import type { RealtimeChannel } from '@supabase/supabase-js'
 
 type BookmarkType = Database['public']['Tables']['bookmarks']['Row']
 
 interface BookmarkListProps {
-  userId: string
+  bookmarks: BookmarkType[]
+  isLoading: boolean
+  connectionStatus: string
+  onDelete: (id: string) => Promise<void>
 }
 
-export default function BookmarkList({ userId }: BookmarkListProps) {
-  const [bookmarks, setBookmarks] = useState<BookmarkType[]>([])
-  const [isLoading, setIsLoading] = useState(true)
+export default function BookmarkList({
+  bookmarks,
+  isLoading,
+  connectionStatus,
+  onDelete,
+}: BookmarkListProps) {
   const [deletingId, setDeletingId] = useState<string | null>(null)
-  const [connectionStatus, setConnectionStatus] = useState<string>('disconnected')
-  const supabase = createBrowserClient()
-
-  // Fetch bookmarks
-  useEffect(() => {
-    fetchBookmarks()
-  }, [userId])
-
-  // Set up real-time WebSocket subscription
-  useEffect(() => {
-    let channel: RealtimeChannel
-
-    const setupRealtimeSubscription = async () => {
-      console.log('🔌 Setting up WebSocket subscription for user:', userId)
-
-      // Use a consistent channel name to avoid frequent re-subscriptions
-      const channelName = `bookmarks-list-${userId}`
-
-      channel = supabase
-        .channel(channelName)
-        .on(
-          'postgres_changes' as any,
-          {
-            event: '*',
-            schema: 'public',
-            table: 'bookmarks',
-            filter: `user_id=eq.${userId}`,
-          },
-          (payload: any) => {
-            console.log('📡 Real-time event received:', payload.eventType, payload)
-
-            if (payload.eventType === 'INSERT') {
-              console.log('➕ Real-time: Adding new bookmark:', payload.new.id)
-              setBookmarks((prev) => {
-                const exists = prev.some((b) => b.id === payload.new.id)
-                if (exists) return prev
-                return [payload.new as BookmarkType, ...prev]
-              })
-            } else if (payload.eventType === 'DELETE') {
-              console.log('🗑️ Real-time: Removing bookmark:', payload.old.id)
-              setBookmarks((prev) => prev.filter((b) => b.id !== payload.old.id))
-            } else if (payload.eventType === 'UPDATE') {
-              console.log('📝 Real-time: Updating bookmark:', payload.new.id)
-              setBookmarks((prev) =>
-                prev.map((b) => (b.id === payload.new.id ? (payload.new as BookmarkType) : b))
-              )
-            }
-          }
-        )
-        .subscribe((status: string) => {
-          console.log('📊 Real-time status:', status)
-          setConnectionStatus(status)
-        })
-    }
-
-    setupRealtimeSubscription()
-
-    return () => {
-      if (channel) {
-        console.log('🔌 Cleaning up WebSocket subscription')
-        supabase.removeChannel(channel)
-      }
-    }
-  }, [userId])
-
-  const fetchBookmarks = async () => {
-    try {
-      console.log('📥 Fetching bookmarks for user:', userId)
-      const { data, error } = await supabase
-        .from('bookmarks')
-        .select('*')
-        .eq('user_id', userId)
-        .order('created_at', { ascending: false })
-
-      if (error) throw error
-      console.log('✅ Fetched bookmarks:', data?.length || 0)
-      setBookmarks(data || [])
-    } catch (error) {
-      console.error('❌ Error fetching bookmarks:', error)
-    } finally {
-      setIsLoading(false)
-    }
-  }
 
   const handleDelete = async (id: string) => {
     if (!confirm('Are you sure you want to delete this bookmark?')) return
 
     setDeletingId(id)
     try {
-      console.log('🗑️ Deleting bookmark:', id)
-      const { error } = await supabase
-        .from('bookmarks')
-        .delete()
-        .eq('id', id)
-        .eq('user_id', userId)
-
-      if (error) throw error
-      console.log('✅ Bookmark deleted successfully')
-
-      // OPTIMISTIC UPDATE: Remove from local state immediately for better UX
-      // This ensures the UI refreshes even if WebSocket is slow
-      setBookmarks((prev) => prev.filter((b) => b.id !== id))
+      await onDelete(id)
     } catch (error) {
-      console.error('❌ Error deleting bookmark:', error)
+      console.error('Error deleting bookmark:', error)
       alert('Failed to delete bookmark. Please try again.')
     } finally {
       setDeletingId(null)
@@ -136,22 +45,38 @@ export default function BookmarkList({ userId }: BookmarkListProps) {
 
   return (
     <>
-      {/* Real-time Connection Status (Subtle) */}
-      <div className="mb-4 flex items-center justify-end gap-2 text-[10px] uppercase tracking-wider font-semibold">
-        <div className={`w-1.5 h-1.5 rounded-full ${connectionStatus === 'SUBSCRIBED' ? 'bg-green-500 shadow-[0_0_5px_rgba(34,197,94,0.5)]' :
-            connectionStatus === 'CHANNEL_ERROR' ? 'bg-red-500' :
-              'bg-gray-300'
-          }`} />
-        <span className={connectionStatus === 'SUBSCRIBED' ? 'text-green-600' : 'text-gray-400'}>
-          {connectionStatus === 'SUBSCRIBED' ? 'Live Sync Active' : 'Connecting Sync...'}
+      {/* Connection Status Indicator */}
+      <div className="mb-4 flex items-center gap-2 text-sm">
+        <div
+          className={`w-2 h-2 rounded-full ${
+            connectionStatus === 'SUBSCRIBED'
+              ? 'bg-green-500 animate-pulse'
+              : connectionStatus === 'CHANNEL_ERROR'
+              ? 'bg-red-500'
+              : 'bg-yellow-500'
+          }`}
+        />
+        <span className="text-gray-600">
+          Real-time:{' '}
+          {connectionStatus === 'SUBSCRIBED'
+            ? 'Connected'
+            : connectionStatus === 'CHANNEL_ERROR'
+            ? 'Error'
+            : connectionStatus === 'TIMED_OUT'
+            ? 'Timed Out'
+            : 'Connecting...'}
         </span>
       </div>
 
       {bookmarks.length === 0 ? (
         <div className="bg-white rounded-lg shadow-md p-12 text-center">
           <Bookmark className="mx-auto h-16 w-16 text-gray-400 mb-4" />
-          <h3 className="text-lg font-medium text-gray-900 mb-2">No bookmarks yet</h3>
-          <p className="text-gray-600">Add your first bookmark using the form above!</p>
+          <h3 className="text-lg font-medium text-gray-900 mb-2">
+            No bookmarks yet
+          </h3>
+          <p className="text-gray-600">
+            Add your first bookmark using the form above!
+          </p>
         </div>
       ) : (
         <div className="space-y-4">
@@ -162,7 +87,9 @@ export default function BookmarkList({ userId }: BookmarkListProps) {
             {bookmarks.map((bookmark) => (
               <div
                 key={bookmark.id}
-                className="bg-white rounded-lg shadow-md p-4 hover:shadow-lg transition-shadow"
+                className={`bg-white rounded-lg shadow-md p-4 hover:shadow-lg transition-all ${
+                  deletingId === bookmark.id ? 'opacity-50 scale-95' : ''
+                }`}
               >
                 <div className="flex items-start justify-between gap-2 mb-2">
                   <h3 className="font-medium text-gray-900 line-clamp-2 flex-1">
@@ -174,7 +101,11 @@ export default function BookmarkList({ userId }: BookmarkListProps) {
                     className="text-red-600 hover:text-red-700 disabled:text-red-400 transition-colors p-1"
                     title="Delete bookmark"
                   >
-                    <Trash2 size={18} />
+                    {deletingId === bookmark.id ? (
+                      <Loader2 size={18} className="animate-spin" />
+                    ) : (
+                      <Trash2 size={18} />
+                    )}
                   </button>
                 </div>
                 <a

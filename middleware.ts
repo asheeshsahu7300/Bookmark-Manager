@@ -10,6 +10,14 @@ export async function middleware(req: NextRequest) {
     data: { session },
   } = await supabase.auth.getSession()
 
+  const isApiRoute = req.nextUrl.pathname.startsWith('/api')
+
+  // For API routes: just refresh the session cookie, don't redirect
+  // The route handler will check auth and return 401 if needed
+  if (isApiRoute) {
+    return res
+  }
+
   // If user is not signed in and the current path is not /login, redirect to /login
   if (!session && req.nextUrl.pathname !== '/login') {
     const redirectUrl = req.nextUrl.clone()
@@ -28,5 +36,5 @@ export async function middleware(req: NextRequest) {
 }
 
 export const config = {
-  matcher: ['/', '/login'],
+  matcher: ['/', '/login', '/api/:path*'],
 }
