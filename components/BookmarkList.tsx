@@ -30,10 +30,10 @@ export default function BookmarkList({ userId }: BookmarkListProps) {
 
     const setupRealtimeSubscription = async () => {
       console.log('🔌 Setting up WebSocket subscription for user:', userId)
-      
+
       // Create a unique channel name with timestamp to avoid conflicts
       const channelName = `bookmarks:${userId}:${Date.now()}`
-      
+
       channel = supabase
         .channel(channelName)
         .on(
@@ -46,7 +46,7 @@ export default function BookmarkList({ userId }: BookmarkListProps) {
           },
           (payload: any) => {
             console.log('📡 WebSocket event received:', payload)
-            
+
             if (payload.eventType === 'INSERT') {
               console.log('➕ Adding new bookmark:', payload.new)
               setBookmarks((prev) => {
@@ -69,17 +69,17 @@ export default function BookmarkList({ userId }: BookmarkListProps) {
           }
         )
         .subscribe((status: string) => {
-          console.log('📊 WebSocket status:', status)
+
           setConnectionStatus(status)
-          
+
           if (status === 'SUBSCRIBED') {
-            console.log('✅ WebSocket connected and subscribed!')
+            console.log('WebSocket connected and subscribed!')
           } else if (status === 'CHANNEL_ERROR') {
-            console.error('❌ WebSocket channel error!')
+            console.error('WebSocket channel error!')
           } else if (status === 'TIMED_OUT') {
-            console.error('⏱️ WebSocket connection timed out!')
+            console.error('WebSocket connection timed out!')
           } else if (status === 'CLOSED') {
-            console.log('🔌 WebSocket connection closed')
+            console.log(' WebSocket connection closed')
           }
         })
     }
@@ -127,6 +127,10 @@ export default function BookmarkList({ userId }: BookmarkListProps) {
 
       if (error) throw error
       console.log('✅ Bookmark deleted successfully')
+
+      // OPTIMISTIC UPDATE: Remove from local state immediately for better UX
+      // This ensures the UI refreshes even if WebSocket is slow
+      setBookmarks((prev) => prev.filter((b) => b.id !== id))
     } catch (error) {
       console.error('❌ Error deleting bookmark:', error)
       alert('Failed to delete bookmark. Please try again.')
@@ -146,21 +150,7 @@ export default function BookmarkList({ userId }: BookmarkListProps) {
   return (
     <>
       {/* Connection Status Indicator */}
-      <div className="mb-4 flex items-center gap-2 text-sm">
-        <div className={`w-2 h-2 rounded-full ${
-          connectionStatus === 'SUBSCRIBED' ? 'bg-green-500 animate-pulse' : 
-          connectionStatus === 'CHANNEL_ERROR' ? 'bg-red-500' : 
-          'bg-yellow-500'
-        }`} />
-        <span className="text-gray-600">
-          Real-time: {
-            connectionStatus === 'SUBSCRIBED' ? 'Connected' :
-            connectionStatus === 'CHANNEL_ERROR' ? 'Error' :
-            connectionStatus === 'TIMED_OUT' ? 'Timed Out' :
-            'Connecting...'
-          }
-        </span>
-      </div>
+
 
       {bookmarks.length === 0 ? (
         <div className="bg-white rounded-lg shadow-md p-12 text-center">

@@ -36,7 +36,19 @@ CREATE POLICY "Users can delete their own bookmarks"
   USING (auth.uid() = user_id);
 
 -- 6. Enable Realtime (for real-time updates across tabs)
-ALTER PUBLICATION supabase_realtime ADD TABLE bookmarks;
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_publication_tables 
+    WHERE pubname = 'supabase_realtime' 
+    AND schemaname = 'public' 
+    AND tablename = 'bookmarks'
+  ) THEN
+    ALTER PUBLICATION supabase_realtime ADD TABLE bookmarks;
+  END IF;
+END $$;
+
+ALTER TABLE bookmarks REPLICA IDENTITY FULL;
 
 -- 7. Verify setup
 SELECT 'Setup completed successfully!' as status;
